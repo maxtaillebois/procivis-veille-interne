@@ -854,40 +854,38 @@ async function sendMail() {
     });
   });
 
-  const payload = {
-    destinataire_email: destEmail,
-    destinataire_nom: destNom,
-    cc_emails: ccEmails,
-    semaine: semaine,
-    articles_procivis: articles,
-  };
+    const selectedFiles = articles.map(a => a.nom_fichier_pdf).filter(f => f && f !== '—').join(',');
+  if (!selectedFiles) {
+    document.getElementById('feedback').innerHTML = '<div class="feedback error">❌ Aucun fichier PDF trouvé pour les articles sélectionnés.</div>';
+    return;
+  }
 
   const feedbackEl = document.getElementById('feedback');
   feedbackEl.innerHTML = '';
   const btn = document.getElementById('btnSend');
   btn.disabled = true;
-  btn.textContent = '⏳ Envoi en cours via N8N…';
+  btn.textContent = '⏳ Lancement de l\'envoi…';
 
   try {
-    const resp = await fetch(CONFIG.N8N_WEBHOOK_URL, {
+    const resp = await fetch(CONFIG.GITHUB_WORKFLOW_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      headers: {
+        'Authorization': `Bearer ${CONFIG.GITHUB_TOKEN}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ref: 'main', inputs: { selected_files: selectedFiles } }),
     });
 
-    if (resp.ok) {
-      const result = await resp.json();
-      if (result.status === 'success') {
-        feedbackEl.innerHTML = '<div class="feedback success">✅ Mail envoyé avec succès !</div>';
-      } else {
-        feedbackEl.innerHTML = `<div class="feedback error">❌ Erreur N8N : ${escHtml(result.message || 'Erreur inconnue')}</div>`;
-      }
+    if (resp.status === 204) {
+      feedbackEl.innerHTML = `<div class="feedback success">✅ Envoi lancé (${articles.length} article(s)) ! Le mail arrivera chez Stéphanie dans ~2 minutes.</div>`;
     } else {
       const text = await resp.text();
-      feedbackEl.innerHTML = `<div class="feedback error">❌ Erreur HTTP ${resp.status} : ${escHtml(text.substring(0, 300))}</div>`;
+      feedbackEl.innerHTML = `<div class="feedback error">❌ Erreur GitHub Actions (HTTP ${resp.status}) : ${escHtml(text.substring(0, 300))}</div>`;
     }
   } catch (err) {
-    feedbackEl.innerHTML = `<div class="feedback error">❌ Impossible de contacter le webhook N8N. Vérifiez l'URL et que N8N est en ligne. (${escHtml(err.message)})</div>`;
+    feedbackEl.innerHTML = `<div class="feedback error">❌ Impossible de contacter l'API GitHub. (${escHtml(err.message)})</div>`;
   } finally {
     btn.disabled = false;
     btn.textContent = '📤 Envoyer';
