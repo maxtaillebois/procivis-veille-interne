@@ -848,11 +848,11 @@ async function sendMail() {
     if (!selectedSet.has(dataIdx)) return;
     const a = filteredArticles[dataIdx];
     articles.push({
-      media: getCol(a, 'media', 'média'),
-      titre: getCol(a, 'titre'),
-      date_publication: getCol(a, dateKey, 'date_publication', 'date publication'),
-      fichier_drive_id: getCol(a, 'id_fichier_drive', 'id fichier drive'),
-    });
+  media: getCol(a, 'media', 'média'),
+  titre: getCol(a, 'titre'),
+  date_publication: getCol(a, dateKey, 'date_publication', 'date publication'),
+  nom_fichier_pdf: getCol(a, 'nom fichier pdf'),
+});
   });
 
     const selectedFiles = articles.map(a => a.nom_fichier_pdf).filter(f => f && f !== '—').join(',');
