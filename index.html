@@ -724,7 +724,7 @@ function renderArticles() {
             ctx.map(item =>
               `<div class="citation-block">` +
               `<div class="citation-kw">${escHtml(item.mot_cle || '')}</div>` +
-              `<div class="citation-text">«\u00a0${escHtml(item.contexte || '')}\u00a0»</div>` +
+              `<div class="citation-text">«\u00a0${escHtml(item.phrase || item.contexte || '')}\u00a0»</div>` +
               `</div>`
             ).join('') +
             '</div>';
