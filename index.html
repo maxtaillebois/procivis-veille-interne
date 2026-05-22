@@ -444,9 +444,10 @@ input[type="checkbox"] {
    ============================================================ */
 
 const CONFIG = {
-  SPREADSHEET_ID: '1t5e1hJ482g-wl6gHeoR0J3yTR-pVOgc9z0rHGREGMN0',       // ID de votre Google Sheet
+  SPREADSHEET_ID: '1t5e1hJ482g-wl6gHeoR0J3yTR-pVOgc9z0rHGREGMN0',
   SHEET_NAME: 'Veille Procivis',
-  N8N_WEBHOOK_URL: 'https://maximetaillebois.app.n8n.cloud/webhook/veille-presse-envoi',      // URL du webhook N8N d'envoi mail
+  GITHUB_TOKEN: 'REMPLACER_PAR_TON_PAT',
+  GITHUB_WORKFLOW_URL: 'https://api.github.com/repos/maxtaillebois/veille-presse-interne-CC/actions/workflows/envoi.yml/dispatches',
   DEFAULT_DEST_EMAIL: 'stephanie@papiersdesoi.fr',
   DEFAULT_DEST_NOM: 'Stéphanie',
   DEFAULT_CC_EMAILS: 'maxime.taillebois@procivis.fr, aurelie.hennetier@procivis.fr',
