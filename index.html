@@ -630,10 +630,16 @@ function applyFilter() {
   const dateKey = Object.keys(filteredArticles[0] || {}).find(k => k.includes('date')) || 'date_publication';
   filteredArticles.sort((a, b) => parseDate(getCol(b, dateKey)) - parseDate(getCol(a, dateKey)));
 
-  // Reset state
+  // Reset state — les coches sont initialisées depuis la colonne
+  // « Sélectionné » du Sheet (source de vérité), pas depuis le navigateur.
   articleOrder = filteredArticles.map((_, i) => i);
   selectedSet.clear();
-  document.getElementById('selectAll').checked = false;
+  filteredArticles.forEach((a, i) => {
+    const sel = String(a['sélectionné'] || a['selectionne'] || '').toLowerCase();
+    if (sel === 'true') selectedSet.add(i);
+  });
+  document.getElementById('selectAll').checked =
+    filteredArticles.length > 0 && selectedSet.size === filteredArticles.length;
 
   renderAll();
 }
@@ -851,10 +857,19 @@ async function sendMail() {
   titre: getCol(a, 'titre'),
   date_publication: getCol(a, dateKey, 'date_publication', 'date publication'),
   nom_fichier_pdf: getCol(a, 'nom fichier pdf'),
+  pages_pdf: getCol(a, 'pages pdf'),
 });
   });
 
-    const selectedFiles = articles.map(a => a.nom_fichier_pdf).filter(f => f && f !== '—').join(',');
+  // Chaque article = « fichier.pdf@debut-fin » quand il est une coupure d'un
+  // PDF « revue de presse » compilé (colonne « Pages PDF » du Sheet), sinon le
+  // nom seul. Sans la plage, le workflow ne peut pas distinguer deux coupures
+  // du même fichier — cause des 3 envois erronés du 2026-07-31.
+  const selectedFiles = articles
+    .filter(a => a.nom_fichier_pdf && a.nom_fichier_pdf !== '—')
+    .map(a => a.nom_fichier_pdf +
+      (a.pages_pdf && a.pages_pdf !== '—' ? '@' + a.pages_pdf : ''))
+    .join(',');
   if (!selectedFiles) {
     document.getElementById('feedback').innerHTML = '<div class="feedback error">❌ Aucun fichier PDF trouvé pour les articles sélectionnés.</div>';
     return;
