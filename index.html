@@ -359,8 +359,100 @@ input[type="checkbox"] {
   font-size: .95rem;
 }
 
+/* ============================================================
+   APERÇU PDF (bouton + fenêtre)
+   ============================================================ */
+
+.btn-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: .45rem 1rem;
+  border: 1.5px solid var(--vert-fonce);
+  border-radius: 8px;
+  background: white;
+  color: var(--vert-fonce);
+  font-size: .88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-preview:hover { background: var(--vert-clair-pale); }
+
+.preview-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(24,45,0,.55);
+  z-index: 1100;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+.preview-overlay.visible { display: flex; }
+.preview-box {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 960px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,.3);
+}
+.preview-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: .8rem 1rem;
+  border-bottom: 1px solid #e5e5e5;
+}
+.preview-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--vert-tres-fonce);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.preview-head a {
+  color: var(--vert-fonce);
+  font-size: .88rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.preview-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: var(--vert-clair-pale);
+  color: var(--vert-tres-fonce);
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.preview-body { position: relative; flex: 1; background: #f2f2f2; }
+.preview-body iframe { width: 100%; height: 100%; border: none; display: block; }
+.preview-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  color: var(--vert-olive);
+  font-size: .95rem;
+}
+
 /* Responsive */
 @media (max-width: 700px) {
+  .preview-overlay { padding: 0; }
+  .preview-box { border-radius: 0; }
   body { padding: 1rem; }
   .stats-bar { flex-direction: column; }
   .form-row { flex-direction: column; }
@@ -375,6 +467,21 @@ input[type="checkbox"] {
 <div class="loading-overlay" id="loading">
   <div class="spinner"></div>
   <div class="loading-text">Chargement des données…</div>
+</div>
+
+<!-- Aperçu PDF -->
+<div class="preview-overlay" id="previewOverlay" onclick="if (event.target === this) closePreview()">
+  <div class="preview-box" role="dialog" aria-modal="true" aria-labelledby="previewTitle">
+    <div class="preview-head">
+      <div class="preview-title" id="previewTitle"></div>
+      <a id="previewNewTab" href="#" target="_blank" rel="noopener">Ouvrir dans un onglet ↗</a>
+      <button class="preview-close" onclick="closePreview()" title="Fermer" aria-label="Fermer">✕</button>
+    </div>
+    <div class="preview-body">
+      <div class="preview-status" id="previewStatus"></div>
+      <iframe id="previewFrame" title="Aperçu du PDF"></iframe>
+    </div>
+  </div>
 </div>
 
 <!-- Hero Header -->
@@ -708,6 +815,9 @@ function renderArticles() {
     const resume = getCol(a, 'resume', 'résumé');
     const motsCles = getCol(a, 'mots_cles_trouves', 'mots-clés trouvés', 'mots_cles_trouves');
     const contexte = getCol(a, 'contexte_citations', 'contexte citations');
+    const nomPdf = getCol(a, 'nom fichier pdf');
+    const pagesPdf = getCol(a, 'pages pdf');
+    const hasPdf = nomPdf && nomPdf !== '—';
 
     // Build badges
     let badgesHtml = '';
@@ -759,6 +869,7 @@ function renderArticles() {
         <div class="article-resume">${escHtml(resume)}</div>
         ${badgesHtml}
         ${citationsHtml}
+        ${hasPdf ? `<button class="btn-preview" onclick="openPreview(${dataIdx})">📄 Aperçu de l'article</button>` : ''}
       </div>
     `;
     container.appendChild(rowDiv);
@@ -891,7 +1002,7 @@ async function sendMail() {
     });
 
     if (resp.status === 204) {
-      feedbackEl.innerHTML = `<div class="feedback success">✅ Envoi lancé (${articles.length} article(s)) ! Le mail arrivera chez Stéphanie dans ~2 minutes.</div>`;
+      feedbackEl.innerHTML = `<div class="feedback success">✅ Envoi lancé (${articles.length} article(s)) ! Le mail arrivera chez Stéphanie dans ~2 minutes. Les articles restent dans la page jusqu'au vendredi suivant : vous pouvez préparer une autre sélection.</div>`;
     } else {
       const text = await resp.text();
       feedbackEl.innerHTML = `<div class="feedback error">❌ Erreur GitHub Actions (HTTP ${resp.status}) : ${escHtml(text.substring(0, 300))}</div>`;
@@ -904,6 +1015,60 @@ async function sendMail() {
     updateSendButton();
   }
 }
+
+/* ============================================================
+   APERÇU PDF — servi par le Worker (GET /pdf), qui récupère la pièce
+   jointe dans Outlook et ne garde que les pages de l'article
+   ============================================================ */
+
+function previewUrl(a) {
+  const nom = getCol(a, 'nom fichier pdf');
+  const pages = getCol(a, 'pages pdf');
+  let url = `${CONFIG.WORKER_URL}/pdf?name=${encodeURIComponent(nom)}`;
+  if (pages && pages !== '—') url += `&pages=${encodeURIComponent(pages)}`;
+  return url;
+}
+
+async function openPreview(dataIdx) {
+  const a = filteredArticles[dataIdx];
+  const url = previewUrl(a);
+  const frame = document.getElementById('previewFrame');
+  const status = document.getElementById('previewStatus');
+  document.getElementById('previewTitle').textContent =
+    `${getCol(a, 'media', 'média')} | ${getCol(a, 'titre')}`;
+  document.getElementById('previewNewTab').href = url;
+  frame.removeAttribute('src');
+  frame.style.visibility = 'hidden';
+  status.textContent = 'Chargement du PDF…';
+  document.getElementById('previewOverlay').classList.add('visible');
+  document.body.style.overflow = 'hidden';
+
+  // Le PDF est d'abord téléchargé ici, pour pouvoir afficher un message clair
+  // en cas d'erreur au lieu d'une page d'erreur brute dans l'iframe.
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(await resp.text() || `HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    if (!document.getElementById('previewOverlay').classList.contains('visible')) return;
+    frame.src = URL.createObjectURL(blob);
+    frame.style.visibility = 'visible';
+    status.textContent = '';
+  } catch (err) {
+    status.textContent = `Aperçu impossible : ${err.message}`;
+  }
+}
+
+function closePreview() {
+  const frame = document.getElementById('previewFrame');
+  if (frame.src && frame.src.startsWith('blob:')) URL.revokeObjectURL(frame.src);
+  frame.removeAttribute('src');
+  document.getElementById('previewOverlay').classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closePreview();
+});
 
 /* ============================================================
    INIT
